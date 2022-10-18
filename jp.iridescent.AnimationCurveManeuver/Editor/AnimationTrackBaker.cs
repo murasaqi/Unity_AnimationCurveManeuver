@@ -1,12 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using iridescent.util;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;
 using UnityEngine.UIElements;
+using Cursor = UnityEngine.UIElements.Cursor;
 
 namespace iridescent.AnimationCurveManeuver
 {
@@ -25,8 +27,16 @@ namespace iridescent.AnimationCurveManeuver
     //     public float time;
     //     public List<AnimationCurveInfo> AnimationCurveInfos;
     // }
-    public class AnimationTrackBaker:EditorWindow
+
+    public class AnimationTrackBakerData
     {
+        public PlayableDirector playableDirector;
+    }
+    
+    public class AnimationTrackBaker : EditorWindow
+    {
+        private AnimationTrackBakerData _data = new AnimationTrackBakerData();
+        
         [MenuItem("Tools/AnimationTrackBaker")]
         public static void ShowWindow()
         {
@@ -42,15 +52,29 @@ namespace iridescent.AnimationCurveManeuver
             objectfield.objectType = typeof(PlayableDirector);
             
             var executeInfoWrapper = new VisualElement();
+            var trackList = new VisualElement();
+            executeInfoWrapper.Add(trackList);
             
+            objectfield.RegisterValueChangedCallback(evt =>
+            {
+                trackList.Clear();
+                
+                _data.playableDirector = objectfield.value as PlayableDirector;
+                if (_data.playableDirector == null)
+                    return;
+                
+                SetAnimationTrackList(trackList);
+            });
+
             var fetchButton = new Button(() =>
             {
-                var playableDirector = objectfield.value as PlayableDirector;
-                if (playableDirector == null)
+                if (_data.playableDirector == null)
                 {
                     Debug.LogError("No TimelineAsset");
                     return;
                 }
+
+                var playableDirector = _data.playableDirector;
                 var timelineAsset = playableDirector.playableAsset as TimelineAsset;
 
                 var tracks = timelineAsset.GetOutputTracks();
@@ -83,13 +107,82 @@ namespace iridescent.AnimationCurveManeuver
                     executeInfoWrapper.Add(container);
                 }
             });
+            fetchButton.text = "Merge";
             
             
             root.Add(objectfield);
-            
-            root.Add(fetchButton);
-            
             root.Add(executeInfoWrapper);
+            root.Add(fetchButton);
+        }
+
+        private void SetAnimationTrackList(VisualElement trackList)
+        {
+            var tracks = TimelineUtil.GetAnimationTrackNameList(_data.playableDirector.playableAsset as TimelineAsset);
+            var cnt = 0;
+            foreach (var (name, track) in tracks)
+            {
+                var bgColor = new Color[2];
+                ColorUtility.TryParseHtmlString("#383838", out bgColor[0]);
+                ColorUtility.TryParseHtmlString("#4c4c4c", out bgColor[1]);
+                var hoveredBgColor = new Color[2];
+                ColorUtility.TryParseHtmlString("#424242", out hoveredBgColor[0]);
+                ColorUtility.TryParseHtmlString("#565656", out hoveredBgColor[1]);
+                var selectedBgColor = new Color[2];
+                ColorUtility.TryParseHtmlString("#9267ca", out selectedBgColor[0]);
+                ColorUtility.TryParseHtmlString("#ad7af0", out selectedBgColor[1]);
+                var selectedHoveredBgColor = new Color[2];
+                ColorUtility.TryParseHtmlString("#6d4c96", out selectedHoveredBgColor[0]);
+                ColorUtility.TryParseHtmlString("#6d4c96", out selectedHoveredBgColor[1]);
+                
+                var trackField = new VisualElement
+                {
+                    style =
+                    {
+                        marginLeft = 3,
+                        marginRight = 3,
+                        paddingTop = 3,
+                        paddingBottom = 3,
+                        flexDirection = FlexDirection.Row,
+                        justifyContent = Justify.FlexStart,
+                        backgroundColor = bgColor[cnt%2]
+                    }
+                };
+                var toggle = new Toggle
+                {
+                    style =
+                    {
+                        marginRight = 10,
+                    }
+                };
+                var cntCopy = cnt;
+                toggle.RegisterValueChangedCallback(evt =>
+                {
+                    trackField.style.backgroundColor = evt.newValue ? selectedBgColor[cntCopy%2] : bgColor[cntCopy%2];
+                });
+                var label = new Label(name);
+                
+                trackField.RegisterCallback<MouseEnterEvent>(evt =>
+                {
+                    trackField.style.backgroundColor = toggle.value ? selectedHoveredBgColor[cntCopy%2] : hoveredBgColor[cntCopy%2];
+                });
+                trackField.RegisterCallback<MouseLeaveEvent>(evt =>
+                {
+                    var color = trackField.style.backgroundColor.value;
+                    trackField.style.backgroundColor =
+                        toggle.value ? selectedBgColor[cntCopy%2] : bgColor[cntCopy%2];
+                });
+                trackField.RegisterCallback<ClickEvent>(evt =>
+                {
+                    toggle.value = !toggle.value;
+                });
+
+                trackField.Add(toggle);
+                trackField.Add(label);
+                
+                trackList.Add(trackField);
+
+                cnt++;
+            }
         }
         
         
