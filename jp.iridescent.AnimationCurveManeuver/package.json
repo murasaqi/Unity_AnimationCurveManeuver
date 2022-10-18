@@ -1,0 +1,10 @@
+﻿{
+  "name": "jp.iridecent.animation-curve-maneuver",
+  "version": "0.0.1",
+  "description": "Animation Curveを操作するユーティリティツール",
+  "displayName": "Animation Curve Manuever",
+  "unity": "2021.3",
+  "dependencies": {
+    "com.unity.timeline": "1.6.4"
+  }
+}
