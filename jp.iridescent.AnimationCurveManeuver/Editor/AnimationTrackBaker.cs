@@ -390,20 +390,30 @@ namespace iridescent.AnimationCurveManeuver
                     foreach (var binding in bindings)
                     {
                         var curve = AnimationUtility.GetEditorCurve(animationClip, binding);
+                        var timeScaledCurve = new AnimationCurve(curve.keys.Select(keyframe => new Keyframe
+                        {
+                            time = keyframe.time,
+                            value = keyframe.time * (float)clip.timeScale,
+                            inTangent = keyframe.inTangent,
+                            inWeight = keyframe.inWeight,
+                            outTangent = keyframe.outTangent,
+                            outWeight = keyframe.outWeight,
+                            weightedMode = keyframe.weightedMode
+                        }).ToArray());
                     
                         if (binding.propertyName == "m_LocalPosition.x")
                         {
-                            positionCurves[0] = curve;
+                            positionCurves[0] = timeScaledCurve;
                         }
 
                         if (binding.propertyName == "m_LocalPosition.y")
                         {
-                            positionCurves[1] = curve;
+                            positionCurves[1] = timeScaledCurve;
                         }
 
                         if (binding.propertyName == "m_LocalPosition.z")
                         {
-                            positionCurves[2] = curve;
+                            positionCurves[2] = timeScaledCurve;
                         }
                     }
                 }
@@ -412,9 +422,12 @@ namespace iridescent.AnimationCurveManeuver
                 foreach (var binding in bindings)
                 {
                     // 親からのPathに変更
+                    var path = trackBindingObject.gameObject.name + (string.IsNullOrEmpty(binding.path)
+                        ? ""
+                        : $"/{binding.path}");
                     var newBinding = new EditorCurveBinding()
                     {
-                        path = $"{trackBindingObject.gameObject.name}",
+                        path = path,
                         propertyName = binding.propertyName,
                         type = binding.type,
                     };
@@ -425,7 +438,11 @@ namespace iridescent.AnimationCurveManeuver
                     for(var i = 0; i < curve.keys.Length; i++)
                     {
                         var keyframe = curve.keys[i];
+                        var keyframeTime = keyframe.time / (float)clip.timeScale;
                         
+                        if(clip.duration <= keyframeTime) continue;
+                        if(keyframeTime <= (float)clip.clipIn) continue;
+
                         // ApplyOffsetに応じてオフセット込みのValueを作成
                         var value = 0f;
                         if (applyOffset)
@@ -445,25 +462,25 @@ namespace iridescent.AnimationCurveManeuver
                             else if (binding.propertyName == "m_LocalPosition.x")
                             {
                                 value = offsetPosition.x + (offsetRotation * new Vector3(
-                                    positionCurves[0].Evaluate(keyframe.time),
-                                    positionCurves[1].Evaluate(keyframe.time),
-                                    positionCurves[2].Evaluate(keyframe.time)
+                                    positionCurves[0].Evaluate(keyframeTime),
+                                    positionCurves[1].Evaluate(keyframeTime),
+                                    positionCurves[2].Evaluate(keyframeTime)
                                 )).x;
                             }
                             else if (binding.propertyName == "m_LocalPosition.y")
                             {
                                 value = offsetPosition.y + (offsetRotation * new Vector3(
-                                    positionCurves[0].Evaluate(keyframe.time),
-                                    positionCurves[1].Evaluate(keyframe.time),
-                                    positionCurves[2].Evaluate(keyframe.time)
+                                    positionCurves[0].Evaluate(keyframeTime),
+                                    positionCurves[1].Evaluate(keyframeTime),
+                                    positionCurves[2].Evaluate(keyframeTime)
                                 )).y;
                             }
                             else if (binding.propertyName == "m_LocalPosition.z")
                             {
                                 value = offsetPosition.z + (offsetRotation * new Vector3(
-                                    positionCurves[0].Evaluate(keyframe.time),
-                                    positionCurves[1].Evaluate(keyframe.time),
-                                    positionCurves[2].Evaluate(keyframe.time)
+                                    positionCurves[0].Evaluate(keyframeTime),
+                                    positionCurves[1].Evaluate(keyframeTime),
+                                    positionCurves[2].Evaluate(keyframeTime)
                                 )).z;
                             }
                             else
@@ -476,9 +493,24 @@ namespace iridescent.AnimationCurveManeuver
                             value = keyframe.value;
                         }
                         
-                        offsetKeyFrames[i] = new Keyframe(keyframe.time + (float)clip.start - (float)clip.clipIn, value);
+                        offsetKeyFrames[i] = new Keyframe
+                        {
+                            time = keyframeTime + (float)clip.start,
+                            value = value,
+                            inTangent = keyframe.inTangent,
+                            inWeight = keyframe.inWeight,
+                            outTangent = keyframe.outTangent,
+                            outWeight = keyframe.outWeight,
+                            weightedMode = keyframe.weightedMode
+                        };
                     }
-                    
+
+                    /*
+                    if (!clipCurveBinding.TryAdd(newBinding, new AnimationCurve(offsetKeyFrames)))
+                    {
+                        Debug.Log($"{newBinding.path}/{newBinding.propertyName}: {newBinding.type}");
+                    }
+                    */
                     clipCurveBinding.Add(newBinding, new AnimationCurve(offsetKeyFrames));
                 }
                 
@@ -491,6 +523,7 @@ namespace iridescent.AnimationCurveManeuver
                     {
                         var bakedCurve = new AnimationCurve(new Keyframe[] { });
 
+                        playableDirector.Play();
                         foreach (var key in curve.keys)
                         {
                             playableDirector.time = key.time;
