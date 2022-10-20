@@ -323,6 +323,7 @@ namespace iridescent.AnimationCurveManeuver
             }
         }
 
+        // 渡されたトラック全てを1クリップにマージ
         private void MergeClips(PlayableDirector playableDirector, AnimationTrack[] targetTracks, bool applyOffset)
         {
             var timeline = playableDirector.playableAsset as TimelineAsset;
@@ -362,6 +363,7 @@ namespace iridescent.AnimationCurveManeuver
             AssetDatabase.SaveAssets();
         }
 
+        // トラックごとのClipのマージ
         private Dictionary<EditorCurveBinding, AnimationCurve> MergeClipsInTrack(AnimationTrack track, double duration, bool applyOffset, PlayableDirector playableDirector)
         {
             var trackCurveBinding = new Dictionary<EditorCurveBinding, AnimationCurve>();
@@ -371,13 +373,42 @@ namespace iridescent.AnimationCurveManeuver
             foreach (var clip in clips)
             {
                 var clipCurveBinding = new Dictionary<EditorCurveBinding, AnimationCurve>();
-                
-                var animationClip = (clip.asset as AnimationPlayableAsset).clip;
+
+                var animationPlayableAsset = clip.asset as AnimationPlayableAsset;
+                var animationClip = animationPlayableAsset.clip;
                 if(animationClip == null)
                     continue;
                 
-                // Bindingとオフセット未適用のCurveを取得
+                // TrackBindingのAnimatorのTransformのBindingのKeyframeを事前取得
+                // オフセット適用時のPosition Curveに必要
                 var bindings = AnimationUtility.GetCurveBindings(animationClip);
+                var offsetPosition = animationPlayableAsset.position;
+                var offsetRotation = animationPlayableAsset.rotation;
+                var positionCurves = new AnimationCurve[3];
+                if (applyOffset)
+                {
+                    foreach (var binding in bindings)
+                    {
+                        var curve = AnimationUtility.GetEditorCurve(animationClip, binding);
+                    
+                        if (binding.propertyName == "m_LocalPosition.x")
+                        {
+                            positionCurves[0] = curve;
+                        }
+
+                        if (binding.propertyName == "m_LocalPosition.y")
+                        {
+                            positionCurves[1] = curve;
+                        }
+
+                        if (binding.propertyName == "m_LocalPosition.z")
+                        {
+                            positionCurves[2] = curve;
+                        }
+                    }
+                }
+
+                // BindingとCurveの加工
                 foreach (var binding in bindings)
                 {
                     // 親からのPathに変更
@@ -388,20 +419,71 @@ namespace iridescent.AnimationCurveManeuver
                         type = binding.type,
                     };
                     
+                    // AnimationCurveの加工
                     var curve = AnimationUtility.GetEditorCurve(animationClip, binding);
-                    
-                    // 再生開始のオフセットを追加
                     var offsetKeyFrames = new Keyframe[curve.keys.Length];
                     for(var i = 0; i < curve.keys.Length; i++)
                     {
                         var keyframe = curve.keys[i];
-                        offsetKeyFrames[i] = new Keyframe(keyframe.time + (float)track.start, keyframe.value);
+                        
+                        // ApplyOffsetに応じてオフセット込みのValueを作成
+                        var value = 0f;
+                        if (applyOffset)
+                        {
+                            if (binding.propertyName == "localEulerAnglesRaw.x")
+                            {
+                                value = offsetRotation.eulerAngles.x + keyframe.value;
+                            }
+                            else if (binding.propertyName == "localEulerAnglesRaw.y")
+                            {
+                                value =  offsetRotation.eulerAngles.y + keyframe.value;
+                            }
+                            else if (binding.propertyName == "localEulerAnglesRaw.z")
+                            {
+                                value =  offsetRotation.eulerAngles.z + keyframe.value;
+                            }
+                            else if (binding.propertyName == "m_LocalPosition.x")
+                            {
+                                value = offsetPosition.x + (offsetRotation * new Vector3(
+                                    positionCurves[0].Evaluate(keyframe.time),
+                                    positionCurves[1].Evaluate(keyframe.time),
+                                    positionCurves[2].Evaluate(keyframe.time)
+                                )).x;
+                            }
+                            else if (binding.propertyName == "m_LocalPosition.y")
+                            {
+                                value = offsetPosition.y + (offsetRotation * new Vector3(
+                                    positionCurves[0].Evaluate(keyframe.time),
+                                    positionCurves[1].Evaluate(keyframe.time),
+                                    positionCurves[2].Evaluate(keyframe.time)
+                                )).y;
+                            }
+                            else if (binding.propertyName == "m_LocalPosition.z")
+                            {
+                                value = offsetPosition.z + (offsetRotation * new Vector3(
+                                    positionCurves[0].Evaluate(keyframe.time),
+                                    positionCurves[1].Evaluate(keyframe.time),
+                                    positionCurves[2].Evaluate(keyframe.time)
+                                )).z;
+                            }
+                            else
+                            {
+                                value = keyframe.value;
+                            }
+                        }
+                        else
+                        {
+                            value = keyframe.value;
+                        }
+                        
+                        offsetKeyFrames[i] = new Keyframe(keyframe.time + (float)clip.start - (float)clip.clipIn, value);
                     }
                     
                     clipCurveBinding.Add(newBinding, new AnimationCurve(offsetKeyFrames));
                 }
                 
                 // ApplyOffsetに応じてオフセット込みのCurveをBake
+                /*
                 if (applyOffset)
                 {
                     var bakedCurveBinding = new Dictionary<EditorCurveBinding, AnimationCurve>();
@@ -434,6 +516,7 @@ namespace iridescent.AnimationCurveManeuver
 
                     clipCurveBinding = bakedCurveBinding;
                 }
+                */
                 
                 // クリップごとのBindingCurveをマージ
                 trackCurveBinding = trackCurveBinding.Concat(clipCurveBinding
