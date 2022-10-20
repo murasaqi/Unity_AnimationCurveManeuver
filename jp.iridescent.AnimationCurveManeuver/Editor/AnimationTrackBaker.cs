@@ -392,8 +392,8 @@ namespace iridescent.AnimationCurveManeuver
                         var curve = AnimationUtility.GetEditorCurve(animationClip, binding);
                         var timeScaledCurve = new AnimationCurve(curve.keys.Select(keyframe => new Keyframe
                         {
-                            time = keyframe.time,
-                            value = keyframe.time * (float)clip.timeScale,
+                            time = keyframe.time * (float)clip.timeScale,
+                            value = keyframe.value,
                             inTangent = keyframe.inTangent,
                             inWeight = keyframe.inWeight,
                             outTangent = keyframe.outTangent,
@@ -440,8 +440,7 @@ namespace iridescent.AnimationCurveManeuver
                         var keyframe = curve.keys[i];
                         var keyframeTime = keyframe.time / (float)clip.timeScale;
                         
-                        if(clip.duration <= keyframeTime) continue;
-                        if(keyframeTime <= (float)clip.clipIn) continue;
+                        if(clip.duration <= keyframeTime) break;
 
                         // ApplyOffsetに応じてオフセット込みのValueを作成
                         var value = 0f;
