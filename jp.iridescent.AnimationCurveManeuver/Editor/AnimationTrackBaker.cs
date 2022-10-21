@@ -378,8 +378,8 @@ namespace iridescent.AnimationCurveManeuver
                 var bindings = AnimationUtility.GetCurveBindings(animationClip);
                 var offsetPosition = animationPlayableAsset.position;
                 var offsetRotation = animationPlayableAsset.rotation;
-                var positionCurves = new AnimationCurve[3]{new AnimationCurve(), new AnimationCurve(), new AnimationCurve()};
-                var rotationCurves = new AnimationCurve[3]{new AnimationCurve(), new AnimationCurve(), new AnimationCurve()};
+                var positionCurves = new[]{new AnimationCurve(), new AnimationCurve(), new AnimationCurve()};;
+                var rotationCurves = new[]{new AnimationCurve(), new AnimationCurve(), new AnimationCurve()};;
                 foreach (var binding in bindings)
                 {
                     var curve = AnimationUtility.GetEditorCurve(animationClip, binding);
@@ -461,8 +461,7 @@ namespace iridescent.AnimationCurveManeuver
                     {
                         var keyframe = curve.keys[i];
                         var keyframeTime = keyframe.time / (float)clip.timeScale;
-                        //var keyframeTime = keyframe.time;
-                        
+
                         //if(clip.duration < keyframeTime) break;
 
                         // ApplyOffsetに応じてオフセット込みのValueを作成
@@ -470,18 +469,17 @@ namespace iridescent.AnimationCurveManeuver
                         if (applyOffset)
                         {
                             var position = new Vector3(positionCurves[0].Evaluate(keyframeTime), positionCurves[1].Evaluate(keyframeTime), positionCurves[2].Evaluate(keyframeTime));
-                            var rotation = Quaternion.Euler(rotationCurves[0].Evaluate(keyframeTime), rotationCurves[1].Evaluate(keyframeTime), rotationCurves[2].Evaluate(keyframeTime));
                             if (binding.propertyName == "localEulerAnglesRaw.x")
                             {
-                                value = (offsetRotation * rotation).eulerAngles.x;
+                                value = offsetRotation.eulerAngles.x + keyframe.value;
                             }
                             else if (binding.propertyName == "localEulerAnglesRaw.y")
                             {
-                                value =  (offsetRotation * rotation).eulerAngles.y;
+                                value =  offsetRotation.eulerAngles.y + keyframe.value;
                             }
                             else if (binding.propertyName == "localEulerAnglesRaw.z")
                             {
-                                value =  (offsetRotation * rotation).eulerAngles.z;
+                                value =  offsetRotation.eulerAngles.z + keyframe.value;
                             }
                             else if (binding.propertyName == "m_LocalPosition.x")
                             {
