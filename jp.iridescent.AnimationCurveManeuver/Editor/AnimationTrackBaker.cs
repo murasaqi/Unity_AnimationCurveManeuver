@@ -14,27 +14,18 @@ using Object = UnityEngine.Object;
 
 namespace iridescent.AnimationCurveManeuver
 {
-
-
-    [Serializable]
-    
-    public struct AnimationCurveInfo
+    public enum OffsetMode
     {
-        public AnimationCurve curve;
-        public EditorCurveBinding binding;
-        public string propertyName;
+        Euler,
+        Quaternion
     }
-    // public struct ExecutePointInfo
-    // {
-    //     public float time;
-    //     public List<AnimationCurveInfo> AnimationCurveInfos;
-    // }
 
     public class AnimationTrackBakerData
     {
         public PlayableDirector playableDirector;
         public Dictionary<AnimationTrack, bool> animationTracks;
         public bool applyOffset;
+        public OffsetMode offsetMode;
     }
 
     public struct KeyFrameTangentMode
@@ -46,6 +37,8 @@ namespace iridescent.AnimationCurveManeuver
     
     public class AnimationTrackBaker : EditorWindow
     {
+        [SerializeField, HideInInspector] private VisualTreeAsset xml;
+        
         private AnimationTrackBakerData _data = new AnimationTrackBakerData();
 
         #region UI
@@ -53,33 +46,30 @@ namespace iridescent.AnimationCurveManeuver
         [MenuItem("Tools/AnimationTrackBaker")]
         public static void ShowWindow()
         {
-            EditorWindow.GetWindow(typeof(AnimationTrackBaker));
+            var window = GetWindow(typeof(AnimationTrackBaker));
+            window.titleContent = new GUIContent("Animation Track Baker");
         }
 
         public void OnEnable()
         {
 
             var root = rootVisualElement;
-
-            var objectfield = new ObjectField("PlayableDirector");
-            objectfield.objectType = typeof(PlayableDirector);
             
-            var executeInfoContainer = new VisualElement();
-            var trackList = new VisualElement();
-            var offsetToggle = new Toggle("Apply Offset");
+            root.Add(xml.CloneTree());
+
+            var trackList = root.Q<VisualElement>("TrackList");
+            var offsetToggle = root.Q<Toggle>("DirtyOffsetToggle");
             offsetToggle.RegisterValueChangedCallback(evt =>
             {
                 _data.applyOffset = evt.newValue;
             });
-            var selectButtonContainer = new VisualElement
+            var offsetMode = root.Q<EnumField>("OffsetRotationMethod");
+            offsetMode.RegisterValueChangedCallback(evt =>
             {
-                style =
-                {
-                    flexDirection = FlexDirection.Row,
-                    justifyContent = Justify.SpaceBetween
-                }
-            };
-            var selectAllButton = new Button(() =>
+                _data.offsetMode = (OffsetMode)evt.newValue;
+            });
+            var selectAllButton = root.Q<Button>("SelectAllButton");
+            selectAllButton.RegisterCallback<ClickEvent>(evt =>
             {
                 var toggles = trackList.Query<Toggle>().ToList();
                 foreach (var toggle in toggles)
@@ -87,9 +77,8 @@ namespace iridescent.AnimationCurveManeuver
                     toggle.value = true;
                 }
             });
-            selectAllButton.style.flexGrow = 1;
-            selectAllButton.text = "Select All";
-            var deselectAllButton = new Button(() =>
+            var deselectAllButton = root.Q<Button>("DeselectAllButton");
+            deselectAllButton.RegisterCallback<ClickEvent>(evt =>
             {
                 var toggles = trackList.Query<Toggle>().ToList();
                 foreach (var toggle in toggles)
@@ -97,30 +86,22 @@ namespace iridescent.AnimationCurveManeuver
                     toggle.value = false;
                 }
             });
-            deselectAllButton.text = "Deselect All";
-            deselectAllButton.style.flexGrow = 1;
-            selectButtonContainer.Add(selectAllButton);
-            selectButtonContainer.Add(deselectAllButton);
-            
-            executeInfoContainer.Add(trackList);
-            executeInfoContainer.Add(offsetToggle);
-            executeInfoContainer.Add(selectButtonContainer);
             
             // TrackListの初期化
-            objectfield.RegisterValueChangedCallback(evt =>
+            var playableDirectorField = root.Q<ObjectField>("PlayableDirectorField");
+            playableDirectorField.RegisterValueChangedCallback(evt =>
             {
                 trackList.Clear();
                 
-                _data.playableDirector = objectfield.value as PlayableDirector;
+                _data.playableDirector = playableDirectorField.value as PlayableDirector;
                 if (_data.playableDirector == null)
                     return;
                 
                 SetAnimationTrackList(trackList);
             });
 
-            var executeResultContainer = new VisualElement();
-
-            var mergeButton = new Button(() =>
+            var mergeButton = root.Q<Button>("MergeButton");
+            mergeButton.RegisterCallback<ClickEvent>(evt =>
             {
                 if (_data.playableDirector == null)
                 {
@@ -132,17 +113,8 @@ namespace iridescent.AnimationCurveManeuver
                 
                 MergeClips(playableDirector,
                     _data.animationTracks.Where(val => val.Value).Select(val => val.Key).ToArray(),
-                    _data.applyOffset);
-              
-                executeResultContainer.Clear();
+                    _data.applyOffset, _data.offsetMode);
             });
-            mergeButton.text = "Merge";
-            
-            
-            root.Add(objectfield);
-            root.Add(executeInfoContainer);
-            root.Add(mergeButton);
-            root.Add(executeResultContainer);
         }
 
         private void SetAnimationTrackList(VisualElement trackList)
@@ -194,6 +166,9 @@ namespace iridescent.AnimationCurveManeuver
                     
                     _data.animationTracks[track] = evt.newValue;
                 });
+                toggle.focusable = false;
+                toggle.pickingMode = PickingMode.Ignore;
+                toggle.RegisterCallback<ClickEvent>(evt => toggle.value = !toggle.value); // トグルをクリックしたときに選択が上書きされてしまう問題への対処
                 var label = new Label($"{name} ({_data.playableDirector.GetGenericBinding(track).name})");
                 
                 trackField.RegisterCallback<MouseEnterEvent>(evt =>
@@ -224,114 +199,8 @@ namespace iridescent.AnimationCurveManeuver
 
         #region Process
 
-        private Dictionary<float,List<AnimationCurveInfo>> executeInfo = new Dictionary<float, List<AnimationCurveInfo>>();
-        
-        private void BakeAnimationClipFromAnimationTrack(PlayableDirector playableDirector, AnimationTrack track)
-        {
-            executeInfo.Clear();
-
-
-
-            var trackBinding = playableDirector.GetGenericBinding(track) as GameObject;
-
-            var timelineClips = track.GetClips();
-            foreach (var timelineClip in timelineClips)
-            {
-
-                var exportClip = new AnimationClip();
-                // track.timelineAsset.editorSettings.
-                exportClip.name = track.name;
-                exportClip.frameRate = (float) track.timelineAsset.editorSettings.frameRate;
-
-
-                var curveBindingDict = new Dictionary<EditorCurveBinding, AnimationCurve>();
-                
-                var animationPlayableAsset = timelineClip.asset as AnimationPlayableAsset;
-                var animationClip = animationPlayableAsset.clip;
-                if (animationClip == null)
-                {
-                    continue;
-                }
-
-                // Bindingの取得
-                var bindings = AnimationUtility.GetCurveBindings(animationClip);
-                foreach (var binding in bindings)
-                {
-                    var curve = AnimationUtility.GetEditorCurve(animationClip, binding);
-                    var copyBinding = new EditorCurveBinding()
-                    {
-                        path = binding.path,
-                        propertyName = binding.propertyName,
-                        type = binding.type,
-                    };
-
-                    foreach (var key in curve.keys)
-                    {
-
-                        if (executeInfo.ContainsKey(key.time))
-                        {
-                            executeInfo[key.time].Add(new AnimationCurveInfo()
-                            {
-                                curve = curve,
-                                binding = copyBinding,
-                                propertyName = copyBinding.propertyName
-                            });
-                        }
-                        else
-                        {
-                            executeInfo.Add(key.time, new List<AnimationCurveInfo>()
-                            {
-                                new AnimationCurveInfo()
-                                {
-                                    curve = curve,
-                                    binding = copyBinding,
-                                    propertyName = copyBinding.propertyName
-                                }
-                            });
-                        }
-
-                    }
-
-                    curveBindingDict.Add(copyBinding, new AnimationCurve(new Keyframe[] { }));
-                }
-
-                // CurveのBake
-                foreach (var (time, curveInfos) in executeInfo)
-                {
-                    playableDirector.time = time;
-                    playableDirector.Evaluate();
-
-                    foreach (var bindCurvePair in curveBindingDict)
-                    {
-                        var bind = bindCurvePair.Key;
-                        var curve = bindCurvePair.Value;
-                        Debug.Log(curve);
-                        if (bind.propertyName == "m_LocalPosition.x")
-                            curve.AddKey(time, trackBinding.transform.localPosition.x);
-                        if (bind.propertyName == "m_LocalPosition.y")
-                            curve.AddKey(time, trackBinding.transform.localPosition.y);
-                        if (bind.propertyName == "m_LocalPosition.z")
-                            curve.AddKey(time, trackBinding.transform.localPosition.z);
-                        if (bind.propertyName == "m_LocalRotation.x")
-                            curve.AddKey(time, trackBinding.transform.localRotation.x);
-                        if (bind.propertyName == "m_LocalRotation.y")
-                            curve.AddKey(time, trackBinding.transform.localRotation.y);
-                        if (bind.propertyName == "m_LocalRotation.z")
-                            curve.AddKey(time, trackBinding.transform.localRotation.z);
-
-                    }
-                }
-
-                // Save
-                AssetDatabase.CreateAsset(exportClip, "Assets/" + exportClip.name + ".anim");
-                AnimationUtility.SetEditorCurves(exportClip, curveBindingDict.Keys.ToArray(),
-                    curveBindingDict.Values.ToArray());
-                AssetDatabase.SaveAssets();
-            }
-        }
-
         // 渡されたトラック全てを1クリップにマージ
-        private void MergeClips(PlayableDirector playableDirector, AnimationTrack[] targetTracks, bool applyOffset)
+        private void MergeClips(PlayableDirector playableDirector, AnimationTrack[] targetTracks, bool applyOffset, OffsetMode offsetMode)
         {
             var timeline = playableDirector.playableAsset as TimelineAsset;
             var mergedClip = new AnimationClip
@@ -343,7 +212,7 @@ namespace iridescent.AnimationCurveManeuver
             var curveBinding = new Dictionary<EditorCurveBinding, AnimationCurve>();
             foreach (var track in targetTracks)
             {
-                var trackCurveBinding = MergeClipsInTrack(track, playableDirector.duration, applyOffset, playableDirector);
+                var trackCurveBinding = MergeClipsInTrack(track, playableDirector.duration, applyOffset, offsetMode, playableDirector);
                 
                 // トラックごとのBindingCurveをマージ
                 curveBinding = curveBinding.Concat(trackCurveBinding
@@ -358,7 +227,7 @@ namespace iridescent.AnimationCurveManeuver
         }
 
         // トラックごとのClipのマージ
-        private Dictionary<EditorCurveBinding, AnimationCurve> MergeClipsInTrack(AnimationTrack track, double duration, bool applyOffset, PlayableDirector playableDirector)
+        private Dictionary<EditorCurveBinding, AnimationCurve> MergeClipsInTrack(AnimationTrack track, double duration, bool applyOffset, OffsetMode offsetMode, PlayableDirector playableDirector)
         {
             var trackCurveBinding = new Dictionary<EditorCurveBinding, AnimationCurve>();
             
@@ -378,8 +247,8 @@ namespace iridescent.AnimationCurveManeuver
                 var bindings = AnimationUtility.GetCurveBindings(animationClip);
                 var offsetPosition = animationPlayableAsset.position;
                 var offsetRotation = animationPlayableAsset.rotation;
-                var positionCurves = new[]{new AnimationCurve(), new AnimationCurve(), new AnimationCurve()};;
-                var rotationCurves = new[]{new AnimationCurve(), new AnimationCurve(), new AnimationCurve()};;
+                var positionCurves = new[]{new AnimationCurve(), new AnimationCurve(), new AnimationCurve()};
+                var rotationCurves = new[]{new AnimationCurve(), new AnimationCurve(), new AnimationCurve()};
                 foreach (var binding in bindings)
                 {
                     var curve = AnimationUtility.GetEditorCurve(animationClip, binding);
@@ -459,27 +328,38 @@ namespace iridescent.AnimationCurveManeuver
                     var offsetKeyFrames = new Keyframe[curve.keys.Length];
                     for(var i = 0; i < curve.keys.Length; i++)
                     {
+                        var prevKeyframe =
+                            i != 0 ? curve.keys[i] : new Keyframe(curve.keys[i].time - 1.0f, curve.keys[i].value);
                         var keyframe = curve.keys[i];
                         var keyframeTime = keyframe.time / (float)clip.timeScale;
 
-                        //if(clip.duration < keyframeTime) break;
+                        if(clip.duration < keyframeTime) break;
 
                         // ApplyOffsetに応じてオフセット込みのValueを作成
                         var value = 0f;
                         if (applyOffset)
                         {
                             var position = new Vector3(positionCurves[0].Evaluate(keyframeTime), positionCurves[1].Evaluate(keyframeTime), positionCurves[2].Evaluate(keyframeTime));
+                            var rotation = new Vector3(rotationCurves[0].Evaluate(keyframeTime), rotationCurves[1].Evaluate(keyframeTime), rotationCurves[2].Evaluate(keyframeTime));
+                            var resultRotation = offsetMode switch
+                            {
+                                OffsetMode.Euler => offsetRotation.eulerAngles + rotation,
+                                OffsetMode.Quaternion => Quaternion
+                                    .Normalize(Quaternion.Euler(rotation) * offsetRotation).eulerAngles,
+                                _ => throw new InvalidOperationException()
+                            };
+                            
                             if (binding.propertyName == "localEulerAnglesRaw.x")
                             {
-                                value = offsetRotation.eulerAngles.x + keyframe.value;
+                                value = resultRotation.x;
                             }
                             else if (binding.propertyName == "localEulerAnglesRaw.y")
                             {
-                                value =  offsetRotation.eulerAngles.y + keyframe.value;
+                                value = resultRotation.y;
                             }
                             else if (binding.propertyName == "localEulerAnglesRaw.z")
                             {
-                                value =  offsetRotation.eulerAngles.z + keyframe.value;
+                                value = resultRotation.z;
                             }
                             else if (binding.propertyName == "m_LocalPosition.x")
                             {

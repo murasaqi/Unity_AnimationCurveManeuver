@@ -1,0 +1,13 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <uie:ObjectField label="Playable Director" type="UnityEngine.Playables.PlayableDirector, UnityEngine.DirectorModule" name="PlayableDirectorField" view-data-key="playableDirectorField" binding-path="_data.playableDirector" />
+    <ui:VisualElement name="ExecuteInfoContainer">
+        <ui:VisualElement name="TrackList" />
+        <ui:Toggle label="Apply Dirty Offset" name="DirtyOffsetToggle" view-data-key="dirtyOffsetToggle" tooltip="If true, apply transform offset of the clip." binding-path="_data.applyOffset" />
+        <ui:EnumField label="Offset Rotation Method" type="iridescent.AnimationCurveManeuver.OffsetMode, Editor.jp.iridecent.AnimationClipManeuver" name="OffsetRotationMethod" view-data-key="offsetRotationMethod" binding-path="_data.offsetMode" />
+        <ui:VisualElement name="SelectButtonContainer" style="flex-direction: row; justify-content: space-between;">
+            <ui:Button tabindex="-1" text="Select All" display-tooltip-when-elided="true" name="SelectAllButton" style="flex-grow: 1;" />
+            <ui:Button tabindex="-1" text="Deselect All" display-tooltip-when-elided="true" name="DeselectAllButton" style="flex-grow: 1;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+    <ui:Button tabindex="-1" text="Merge" display-tooltip-when-elided="true" name="MergeButton" />
+</ui:UXML>
