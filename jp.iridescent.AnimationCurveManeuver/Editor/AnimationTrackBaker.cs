@@ -23,6 +23,7 @@ namespace iridescent.AnimationCurveManeuver
     public class AnimationTrackBakerData
     {
         public PlayableDirector playableDirector;
+        public GameObject rootGameObject;
         public Dictionary<AnimationTrack, bool> animationTracks;
         public bool applyOffset;
         public OffsetMode offsetMode;
@@ -57,17 +58,26 @@ namespace iridescent.AnimationCurveManeuver
             
             root.Add(xml.CloneTree());
 
+            var rootObjectField = root.Q<ObjectField>("RootGameObject");
+            rootObjectField.RegisterValueChangedCallback(evt =>
+            {
+                _data.rootGameObject = evt.newValue as GameObject;
+            });
+            
             var trackList = root.Q<VisualElement>("TrackList");
+            
             var offsetToggle = root.Q<Toggle>("DirtyOffsetToggle");
             offsetToggle.RegisterValueChangedCallback(evt =>
             {
                 _data.applyOffset = evt.newValue;
             });
+            
             var offsetMode = root.Q<EnumField>("OffsetRotationMethod");
             offsetMode.RegisterValueChangedCallback(evt =>
             {
                 _data.offsetMode = (OffsetMode)evt.newValue;
             });
+            
             var selectAllButton = root.Q<Button>("SelectAllButton");
             selectAllButton.RegisterCallback<ClickEvent>(evt =>
             {
@@ -77,6 +87,7 @@ namespace iridescent.AnimationCurveManeuver
                     toggle.value = true;
                 }
             });
+            
             var deselectAllButton = root.Q<Button>("DeselectAllButton");
             deselectAllButton.RegisterCallback<ClickEvent>(evt =>
             {
@@ -113,7 +124,7 @@ namespace iridescent.AnimationCurveManeuver
                 
                 MergeClips(playableDirector,
                     _data.animationTracks.Where(val => val.Value).Select(val => val.Key).ToArray(),
-                    _data.applyOffset, _data.offsetMode);
+                    _data.rootGameObject.transform, _data.applyOffset, _data.offsetMode);
             });
         }
 
@@ -200,7 +211,7 @@ namespace iridescent.AnimationCurveManeuver
         #region Process
 
         // 渡されたトラック全てを1クリップにマージ
-        private void MergeClips(PlayableDirector playableDirector, AnimationTrack[] targetTracks, bool applyOffset, OffsetMode offsetMode)
+        private void MergeClips(PlayableDirector playableDirector, AnimationTrack[] targetTracks, Transform root, bool applyOffset, OffsetMode offsetMode)
         {
             var timeline = playableDirector.playableAsset as TimelineAsset;
             var mergedClip = new AnimationClip
@@ -212,7 +223,14 @@ namespace iridescent.AnimationCurveManeuver
             var curveBinding = new Dictionary<EditorCurveBinding, AnimationCurve>();
             foreach (var track in targetTracks)
             {
-                var trackCurveBinding = MergeClipsInTrack(track, playableDirector.duration, applyOffset, offsetMode, playableDirector);
+                var trackBindingObject = playableDirector.GetGenericBinding(track) as Animator;
+                var pathToObject = GetPath(root, trackBindingObject.transform);
+                if (pathToObject == null)
+                {
+                    Debug.LogError($"Path Not Found from root to track binding object.");
+                    return;
+                }
+                var trackCurveBinding = MergeClipsInTrack(track, pathToObject, playableDirector.duration, applyOffset, offsetMode, playableDirector);
                 
                 // トラックごとのBindingCurveをマージ
                 curveBinding = curveBinding.Concat(trackCurveBinding
@@ -227,11 +245,10 @@ namespace iridescent.AnimationCurveManeuver
         }
 
         // トラックごとのClipのマージ
-        private Dictionary<EditorCurveBinding, AnimationCurve> MergeClipsInTrack(AnimationTrack track, double duration, bool applyOffset, OffsetMode offsetMode, PlayableDirector playableDirector)
+        private Dictionary<EditorCurveBinding, AnimationCurve> MergeClipsInTrack(AnimationTrack track, string pathToTrackObject, double duration, bool applyOffset, OffsetMode offsetMode, PlayableDirector playableDirector)
         {
             var trackCurveBinding = new Dictionary<EditorCurveBinding, AnimationCurve>();
             
-            var trackBindingObject = playableDirector.GetGenericBinding(track) as Animator;
             var clips = track.GetClips();
             foreach (var clip in clips)
             {
@@ -300,7 +317,7 @@ namespace iridescent.AnimationCurveManeuver
                 foreach (var binding in bindings)
                 {
                     // 親からのPathに変更
-                    var path = trackBindingObject.gameObject.name + (string.IsNullOrEmpty(binding.path)
+                    var path = pathToTrackObject + (string.IsNullOrEmpty(binding.path)
                         ? ""
                         : $"/{binding.path}");
                     var newBinding = new EditorCurveBinding()
@@ -413,6 +430,30 @@ namespace iridescent.AnimationCurveManeuver
                     .ToDictionary(pair => pair.Key, pair => pair.Value);
             }
             return trackCurveBinding;
+        }
+
+        #endregion
+
+        #region Utils
+
+        private string GetPath(Transform rootTrans, Transform targetTrans)
+        {
+            string GetPathRecursive(Transform baseTrans, Transform targetTrans, string path)
+            {
+                if (baseTrans.name == targetTrans.name) return path;
+                var childrenCount = baseTrans.childCount;
+                for (var i = 0; i < childrenCount; i++)
+                {
+                    var child = baseTrans.GetChild(i);
+                    var result = GetPathRecursive(child, targetTrans, (string.IsNullOrEmpty(path) ? "" : $"{path}/") + child.name);
+                    if (result != null)
+                        return result;
+                }
+
+                return null;
+            }
+
+            return  GetPathRecursive(rootTrans, targetTrans, "");
         }
 
         #endregion

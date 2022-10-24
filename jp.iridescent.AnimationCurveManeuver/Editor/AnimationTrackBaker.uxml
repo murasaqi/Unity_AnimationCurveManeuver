@@ -1,5 +1,6 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
     <uie:ObjectField label="Playable Director" type="UnityEngine.Playables.PlayableDirector, UnityEngine.DirectorModule" name="PlayableDirectorField" view-data-key="playableDirectorField" binding-path="_data.playableDirector" />
+    <uie:ObjectField label="Root GameObject" type="UnityEngine.GameObject, UnityEngine.CoreModule" binding-path="_data.rootGameObject" name="RootGameObject" view-data-key="rootGameObject" tooltip="Root of the animation clip to be baked." />
     <ui:VisualElement name="ExecuteInfoContainer">
         <ui:VisualElement name="TrackList" />
         <ui:Toggle label="Apply Dirty Offset" name="DirtyOffsetToggle" view-data-key="dirtyOffsetToggle" tooltip="If true, apply transform offset of the clip." binding-path="_data.applyOffset" />
