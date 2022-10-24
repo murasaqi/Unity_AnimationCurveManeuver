@@ -237,33 +237,22 @@ namespace iridescent.AnimationCurveManeuver
                 var trackCurveBinding = MergeClipsInTrack(track, pathToObject, playableDirector.duration, applyOffset, offsetMode, playableDirector);
                 
                 // トラックごとのBindingCurveをマージ
-                curveBinding = curveBinding.Concat(trackCurveBinding
-                        .Where(pair => !curveBinding.ContainsKey(pair.Key)))
-                    .ToDictionary(pair => pair.Key, pair => pair.Value);
+                curveBinding = MergeBindingCurveDictionaries(curveBinding, trackCurveBinding);
             }
             
             // ファイル出力
             var timeline = playableDirector.playableAsset as TimelineAsset;
-            var mergedClip = AssetDatabase.LoadAssetAtPath<AnimationClip>(exportPath);
-            
-            if (mergedClip == null)
+            var mergedClip = new AnimationClip
             {
-                mergedClip = new AnimationClip();
-                AssetDatabase.CreateAsset(mergedClip, exportPath);
-            }
-            else
-            {
-                Undo.RegisterCompleteObjectUndo(mergedClip, mergedClip.name);
-            }
-            
-            mergedClip.name = Path.GetFileName(exportPath);
-            mergedClip.frameRate = (float) timeline.editorSettings.frameRate;
+                name = Path.GetFileName(exportPath),
+                frameRate = (float) timeline.editorSettings.frameRate,
+            };
             
             AnimationUtility.SetEditorCurves(mergedClip, curveBinding.Keys.ToArray(),
                 curveBinding.Values.ToArray());
             
             EditorUtility.SetDirty(mergedClip);
-            AssetDatabase.SaveAssets();
+            TimelineUtil.CreateAnimationClipAssetWithOverwrite(mergedClip, exportPath);
         }
 
         // トラックごとのClipのマージ
@@ -280,7 +269,7 @@ namespace iridescent.AnimationCurveManeuver
                 var animationClip = animationPlayableAsset.clip;
                 if(animationClip == null)
                     continue;
-                
+
                 // TrackBindingのAnimatorのTransformのBindingのKeyframeを事前取得
                 // オフセット適用時のPosition Curveに必要
                 var bindings = AnimationUtility.GetCurveBindings(animationClip);
@@ -367,8 +356,6 @@ namespace iridescent.AnimationCurveManeuver
                     var offsetKeyFrames = new Keyframe[curve.keys.Length];
                     for(var i = 0; i < curve.keys.Length; i++)
                     {
-                        var prevKeyframe =
-                            i != 0 ? curve.keys[i] : new Keyframe(curve.keys[i].time - 1.0f, curve.keys[i].value);
                         var keyframe = curve.keys[i];
                         var keyframeTime = keyframe.time / (float)clip.timeScale;
 
@@ -447,9 +434,8 @@ namespace iridescent.AnimationCurveManeuver
                 }
                 
                 // クリップごとのBindingCurveをマージ
-                trackCurveBinding = trackCurveBinding.Concat(clipCurveBinding
-                    .Where(pair => !trackCurveBinding.ContainsKey(pair.Key)))
-                    .ToDictionary(pair => pair.Key, pair => pair.Value);
+                trackCurveBinding = MergeBindingCurveDictionaries(trackCurveBinding, clipCurveBinding);
+
             }
             return trackCurveBinding;
         }
@@ -476,6 +462,26 @@ namespace iridescent.AnimationCurveManeuver
             }
 
             return  GetPathRecursive(rootTrans, targetTrans, "");
+        }
+
+        private Dictionary<EditorCurveBinding, AnimationCurve> MergeBindingCurveDictionaries(Dictionary<EditorCurveBinding, AnimationCurve> dictionary1,
+            Dictionary<EditorCurveBinding, AnimationCurve> dictionary2)
+        {
+            var merged = dictionary1.ToDictionary(pair => pair.Key, pair => pair.Value);
+            foreach (var (binding, curve) in dictionary2)
+            {
+                if (merged.ContainsKey(binding))
+                {
+                    merged[binding] =
+                        new AnimationCurve(merged[binding].keys.Concat(curve.keys).ToArray());
+                }
+                else
+                {
+                    merged.Add(binding, curve);
+                }
+            }
+
+            return merged;
         }
 
         #endregion

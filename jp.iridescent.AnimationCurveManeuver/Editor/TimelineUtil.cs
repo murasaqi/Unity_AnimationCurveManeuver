@@ -183,6 +183,50 @@ namespace iridescent.util
         //     
         // }
         
+        public static DirectoryInfo SafeCreateDirectory(string path)
+        {
+            if (Directory.Exists(path))
+            {
+                return null;
+            }
+
+            return Directory.CreateDirectory(path);
+        }
         
+        public static void CreateAnimationClipAssetWithOverwrite(UnityEngine.Object asset, string exportPath)
+        {
+            SafeCreateDirectory(Path.GetDirectoryName(exportPath));
+
+            //アセットが存在しない場合はそのまま作成(metaファイルも新規作成)
+            if (!File.Exists(exportPath))
+            {
+                AssetDatabase.CreateAsset(asset, exportPath);
+                return;
+            }
+            //既存のファイルがあればUndo登録する
+            else
+            {
+                var existingClip = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(exportPath);
+                Undo.RegisterCompleteObjectUndo(existingClip, existingClip.name);
+            }
+
+            //仮ファイルを作るためのディレクトリを作成
+            var fileName = Path.GetFileName(exportPath);
+            var tmpDirectoryPath = Path.Combine(exportPath.Replace(fileName, ""), "tmpDirectory");
+            Directory.CreateDirectory(tmpDirectoryPath);
+
+            //仮ファイルを保存
+            var tmpFilePath = Path.Combine(tmpDirectoryPath, fileName);
+            AssetDatabase.CreateAsset(asset, tmpFilePath);
+
+            //仮ファイルを既存のファイルに上書き(metaデータはそのまま)
+            FileUtil.ReplaceFile(tmpFilePath, exportPath);
+
+            //仮ディレクトリとファイルを削除
+            AssetDatabase.DeleteAsset(tmpDirectoryPath);
+
+            //データ変更をUnityに伝えるためインポートしなおし
+            AssetDatabase.ImportAsset(exportPath);
+        }
     }
 }
