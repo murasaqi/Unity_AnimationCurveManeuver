@@ -10,5 +10,9 @@
             <ui:Button tabindex="-1" text="Deselect All" display-tooltip-when-elided="true" name="DeselectAllButton" style="flex-grow: 1;" />
         </ui:VisualElement>
     </ui:VisualElement>
+    <ui:VisualElement style="flex-direction: row; flex-grow: 0;">
+        <ui:TextField picking-mode="Ignore" label="Export File Path" name="ExportFilePath" view-data-key="exportFilePath" binding-path="_data.exportFilePath" readonly="true" style="flex-grow: 3;" />
+        <ui:Button tabindex="-1" text="..." display-tooltip-when-elided="true" enable-rich-text="true" name="PathSelectorButton" />
+    </ui:VisualElement>
     <ui:Button tabindex="-1" text="Merge" display-tooltip-when-elided="true" name="MergeButton" />
 </ui:UXML>

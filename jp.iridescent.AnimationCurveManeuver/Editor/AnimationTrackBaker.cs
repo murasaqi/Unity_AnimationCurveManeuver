@@ -27,6 +27,7 @@ namespace iridescent.AnimationCurveManeuver
         public Dictionary<AnimationTrack, bool> animationTracks;
         public bool applyOffset;
         public OffsetMode offsetMode;
+        public string exportFilePath;
     }
 
     public struct KeyFrameTangentMode
@@ -111,6 +112,18 @@ namespace iridescent.AnimationCurveManeuver
                 SetAnimationTrackList(trackList);
             });
 
+            var exportFilePath = root.Q<TextField>("ExportFilePath");
+            exportFilePath.RegisterValueChangedCallback(evt =>
+            {
+                _data.exportFilePath = evt.newValue;
+            });
+            var pathSelectorButton = root.Q<Button>("PathSelectorButton");
+            pathSelectorButton.RegisterCallback<ClickEvent>(evt =>
+            {
+                exportFilePath.value = EditorUtility.SaveFilePanelInProject("Select file path to save",
+                    "MergedAnimationClip.anim", "anim", "Select file path to save in Project.");
+            });
+
             var mergeButton = root.Q<Button>("MergeButton");
             mergeButton.RegisterCallback<ClickEvent>(evt =>
             {
@@ -124,7 +137,7 @@ namespace iridescent.AnimationCurveManeuver
                 
                 MergeClips(playableDirector,
                     _data.animationTracks.Where(val => val.Value).Select(val => val.Key).ToArray(),
-                    _data.rootGameObject.transform, _data.applyOffset, _data.offsetMode);
+                    _data.rootGameObject.transform, _data.applyOffset, _data.offsetMode, _data.exportFilePath);
             });
         }
 
@@ -211,7 +224,7 @@ namespace iridescent.AnimationCurveManeuver
         #region Process
 
         // 渡されたトラック全てを1クリップにマージ
-        private void MergeClips(PlayableDirector playableDirector, AnimationTrack[] targetTracks, Transform root, bool applyOffset, OffsetMode offsetMode)
+        private void MergeClips(PlayableDirector playableDirector, AnimationTrack[] targetTracks, Transform root, bool applyOffset, OffsetMode offsetMode, string exportPath)
         {
             var timeline = playableDirector.playableAsset as TimelineAsset;
             var mergedClip = new AnimationClip
@@ -238,7 +251,7 @@ namespace iridescent.AnimationCurveManeuver
                     .ToDictionary(pair => pair.Key, pair => pair.Value);
             }
             
-            AssetDatabase.CreateAsset(mergedClip, $"Assets/{mergedClip.name}.anim");
+            AssetDatabase.CreateAsset(mergedClip, exportPath);
             AnimationUtility.SetEditorCurves(mergedClip, curveBinding.Keys.ToArray(),
                 curveBinding.Values.ToArray());
             AssetDatabase.SaveAssets();
