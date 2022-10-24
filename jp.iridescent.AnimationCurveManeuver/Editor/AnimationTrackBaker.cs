@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Text;
 using iridescent.util;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -9,8 +9,6 @@ using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;
 using UnityEngine.UIElements;
-using Cursor = UnityEngine.UIElements.Cursor;
-using Object = UnityEngine.Object;
 
 namespace iridescent.AnimationCurveManeuver
 {
@@ -226,13 +224,6 @@ namespace iridescent.AnimationCurveManeuver
         // 渡されたトラック全てを1クリップにマージ
         private void MergeClips(PlayableDirector playableDirector, AnimationTrack[] targetTracks, Transform root, bool applyOffset, OffsetMode offsetMode, string exportPath)
         {
-            var timeline = playableDirector.playableAsset as TimelineAsset;
-            var mergedClip = new AnimationClip
-            {
-                name = $"{playableDirector.name}_merged",
-                frameRate = (float) timeline.editorSettings.frameRate
-            };
-            
             var curveBinding = new Dictionary<EditorCurveBinding, AnimationCurve>();
             foreach (var track in targetTracks)
             {
@@ -251,9 +242,27 @@ namespace iridescent.AnimationCurveManeuver
                     .ToDictionary(pair => pair.Key, pair => pair.Value);
             }
             
-            AssetDatabase.CreateAsset(mergedClip, exportPath);
+            // ファイル出力
+            var timeline = playableDirector.playableAsset as TimelineAsset;
+            var mergedClip = AssetDatabase.LoadAssetAtPath<AnimationClip>(exportPath);
+            
+            if (mergedClip == null)
+            {
+                mergedClip = new AnimationClip();
+                AssetDatabase.CreateAsset(mergedClip, exportPath);
+            }
+            else
+            {
+                Undo.RegisterCompleteObjectUndo(mergedClip, mergedClip.name);
+            }
+            
+            mergedClip.name = Path.GetFileName(exportPath);
+            mergedClip.frameRate = (float) timeline.editorSettings.frameRate;
+            
             AnimationUtility.SetEditorCurves(mergedClip, curveBinding.Keys.ToArray(),
                 curveBinding.Values.ToArray());
+            
+            EditorUtility.SetDirty(mergedClip);
             AssetDatabase.SaveAssets();
         }
 
@@ -363,7 +372,7 @@ namespace iridescent.AnimationCurveManeuver
                         var keyframe = curve.keys[i];
                         var keyframeTime = keyframe.time / (float)clip.timeScale;
 
-                        if(clip.duration < keyframeTime) break;
+                        //if(clip.duration < keyframeTime) break;
 
                         // ApplyOffsetに応じてオフセット込みのValueを作成
                         var value = 0f;
