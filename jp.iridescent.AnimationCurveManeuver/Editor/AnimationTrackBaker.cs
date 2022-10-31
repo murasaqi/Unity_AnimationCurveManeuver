@@ -137,6 +137,22 @@ namespace iridescent.AnimationCurveManeuver
                     _data.animationTracks.Where(val => val.Value).Select(val => val.Key).ToArray(),
                     _data.rootGameObject.transform, _data.applyOffset, _data.offsetMode, _data.exportFilePath);
             });
+            
+            var exportTracksButton = root.Q<Button>("ExportTracksButton");
+            exportTracksButton.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (_data.playableDirector == null)
+                {
+                    Debug.LogError("No TimelineAsset");
+                    return;
+                }
+
+                var playableDirector = _data.playableDirector;
+                
+                ExportTracks(playableDirector,
+                    _data.animationTracks.Where(val => val.Value).Select(val => val.Key).ToArray(),
+                    _data.rootGameObject.transform, _data.applyOffset, _data.offsetMode, _data.exportFilePath);
+            });
         }
 
         private void SetAnimationTrackList(VisualElement trackList)
@@ -254,6 +270,46 @@ namespace iridescent.AnimationCurveManeuver
             EditorUtility.SetDirty(mergedClip);
             TimelineUtil.CreateAnimationClipAssetWithOverwrite(mergedClip, exportPath);
         }
+        
+        
+        private void ExportTracks(PlayableDirector playableDirector, AnimationTrack[] targetTracks, Transform root, bool applyOffset, OffsetMode offsetMode, string exportDirectory )
+        {
+          
+            foreach (var track in targetTracks)
+            {
+                var curveBinding = new Dictionary<EditorCurveBinding, AnimationCurve>();
+                var trackBindingObject = playableDirector.GetGenericBinding(track) as Animator;
+                var pathToObject = GetPath(root, trackBindingObject.transform);
+                if (pathToObject == null)
+                {
+                    Debug.LogError($"Path Not Found from root to track binding object.");
+                    return;
+                }
+                var trackCurveBinding = MergeClipsInTrack(track, pathToObject, playableDirector.duration, applyOffset, offsetMode, playableDirector);
+                
+                // トラックごとのBindingCurveをマージ
+                curveBinding = MergeBindingCurveDictionaries(curveBinding, trackCurveBinding);
+                
+                var exportPath = Path.Combine(exportDirectory, trackBindingObject.name + ".anim");
+                
+                var timelineAsset = playableDirector.playableAsset as TimelineAsset;
+                var mergedClip = new AnimationClip
+                {
+                    name = Path.GetFileName(exportPath),
+                    frameRate = (float) timelineAsset.editorSettings.frameRate,
+                };
+            
+                AnimationUtility.SetEditorCurves(mergedClip, curveBinding.Keys.ToArray(),
+                    curveBinding.Values.ToArray());
+            
+                EditorUtility.SetDirty(mergedClip);
+                TimelineUtil.CreateAnimationClipAssetWithOverwrite(mergedClip, exportPath);
+
+            }
+            
+            // ファイル出力
+        }
+        
 
         // トラックごとのClipのマージ
         private Dictionary<EditorCurveBinding, AnimationCurve> MergeClipsInTrack(AnimationTrack track, string pathToTrackObject, double duration, bool applyOffset, OffsetMode offsetMode, PlayableDirector playableDirector)
