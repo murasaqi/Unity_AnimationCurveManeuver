@@ -193,7 +193,7 @@ namespace iridescent.util
             return Directory.CreateDirectory(path);
         }
         
-        public static void CreateAnimationClipAssetWithOverwrite(UnityEngine.Object asset, string exportPath)
+        public static void CreateAnimationClipAssetWithOverwrite(ref AnimationClip asset, string exportPath)
         {
             SafeCreateDirectory(Path.GetDirectoryName(exportPath));
 
@@ -227,6 +227,9 @@ namespace iridescent.util
 
             //データ変更をUnityに伝えるためインポートしなおし
             AssetDatabase.ImportAsset(exportPath);
+
+            // 仮ファイルの削除時に変更されたassetを出力ファイルに再設定
+            asset = AssetDatabase.LoadAssetAtPath<AnimationClip>(exportPath);
         }
     }
 }

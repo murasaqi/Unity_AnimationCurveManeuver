@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using iridescent.util;
 using UnityEditor;
+using UnityEditor.Search;
 using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.Playables;
@@ -138,24 +139,37 @@ namespace iridescent.AnimationCurveManeuver
                     exportFilePath.value = result;
                 }
             });
+            
+            // 結果出力フィールド
+            var resultContainer = root.Q<VisualElement>("ResultContainer");
+            var resultField = root.Q<VisualElement>("Result");
 
             // マージ出力ボタン
             var mergeButton = root.Q<Button>("MergeButton");
             mergeButton.RegisterCallback<ClickEvent>(evt =>
             {
-                if (_data.playableDirector == null)
+                if (!CheckAllParameterSet())
                 {
-                    Debug.LogError("No TimelineAsset");
                     return;
                 }
+                
+                resultField.Clear();
+                resultContainer.style.display = DisplayStyle.None;
 
                 var playableDirector = _data.playableDirector;
                 
-                MergeClips(playableDirector,
+                var result = MergeClips(playableDirector,
                     _data.animationTracks.Where(val => val.Value).Select(val => val.Key).ToArray(),
                     _data.rootGameObject.transform, _data.applyOffset, _data.offsetMode, _data.exportFilePath);
+
+                // 結果表示
+                if (result != null)
+                {
+                    resultContainer.style.display = DisplayStyle.Flex;
+                    resultField.Add(new ObjectField(result.name){value = result});
+                }
             });
-            
+
             /*
             var exportTracksButton = root.Q<Button>("ExportTracksButton");
             exportTracksButton.RegisterCallback<ClickEvent>(evt =>
@@ -295,13 +309,43 @@ namespace iridescent.AnimationCurveManeuver
                 (trackElementPairs[i].Item2.Children().First() as Toggle).value = true;
             }
         }
+        
+        // 出力実行時のパラメータ検証
+        private bool CheckAllParameterSet()
+        {
+            if (_data.playableDirector == null)
+            {
+                Debug.LogError("Playable Director not set.");
+                return false;
+            }
+
+            if (_data.rootGameObject == null)
+            {
+                Debug.LogError("Root GameObject not set.");
+                return false;
+            }
+            
+            if (!_data.animationTracks.ContainsValue(true))
+            {
+                Debug.LogError("No tracks selected.");
+                return false;
+            }
+            
+            if (string.IsNullOrEmpty(_data.exportFilePath))
+            {
+                Debug.LogError("Export File Path not set.");
+                return false;
+            }
+
+            return true;
+        }
 
         #endregion
 
         #region Process
 
         // 渡されたトラック全てを1クリップにマージ
-        private void MergeClips(PlayableDirector playableDirector, AnimationTrack[] targetTracks, Transform root, bool applyOffset, OffsetMode offsetMode, string exportPath)
+        private AnimationClip MergeClips(PlayableDirector playableDirector, AnimationTrack[] targetTracks, Transform root, bool applyOffset, OffsetMode offsetMode, string exportPath)
         {
             var curveBinding = new Dictionary<EditorCurveBinding, AnimationCurve>();
             foreach (var track in targetTracks)
@@ -311,7 +355,7 @@ namespace iridescent.AnimationCurveManeuver
                 if (pathToObject == null)
                 {
                     Debug.LogError($"Path Not Found from root to track binding object.");
-                    return;
+                    return null;
                 }
                 var trackCurveBinding = MergeClipsInTrack(track, pathToObject, playableDirector.duration, applyOffset, offsetMode, playableDirector);
                 
@@ -331,7 +375,9 @@ namespace iridescent.AnimationCurveManeuver
                 curveBinding.Values.ToArray());
             
             EditorUtility.SetDirty(mergedClip);
-            TimelineUtil.CreateAnimationClipAssetWithOverwrite(mergedClip, exportPath);
+            TimelineUtil.CreateAnimationClipAssetWithOverwrite(ref mergedClip, exportPath);
+
+            return mergedClip;
         }
         
         
