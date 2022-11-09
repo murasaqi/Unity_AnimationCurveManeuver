@@ -19,6 +19,12 @@ namespace iridescent.AnimationCurveManeuver
         Quaternion
     }
 
+    public enum ExportMode
+    {
+        AllMerge,
+        PerTrack,
+    }
+
     public class AnimationTrackBakerData
     {
         public PlayableDirector playableDirector;
@@ -27,6 +33,8 @@ namespace iridescent.AnimationCurveManeuver
         public bool applyOffset;
         public OffsetMode offsetMode;
         public string exportFilePath;
+        public string exportFolderPath;
+        public ExportMode exportMode;
     }
 
     public struct KeyFrameTangentMode
@@ -115,28 +123,72 @@ namespace iridescent.AnimationCurveManeuver
             });
 
             // 出力ファイルのパス設定
-            var exportFilePath = root.Q<TextField>("ExportFilePath");
-            exportFilePath.RegisterValueChangedCallback(evt =>
+            var exportFilePathField = root.Q<TextField>("ExportFilePath");
+            const string exportFilePathLabel = "Export File Path";
+            const string exportFolderPathLabel = "Export Folder Path";
+            exportFilePathField.RegisterValueChangedCallback(evt =>
             {
-                _data.exportFilePath = exportFilePath.value;
-
-                if (File.Exists($"{Path.GetDirectoryName(Application.dataPath)}/{_data.exportFilePath}"))
+                if (_data.exportMode == ExportMode.AllMerge)
                 {
-                    exportFilePath.label = "Export File Path *";
+                    _data.exportFilePath = exportFilePathField.value;
+                    if (File.Exists($"{Path.GetDirectoryName(Application.dataPath)}/{_data.exportFilePath}"))
+                    {
+                        exportFilePathField.label = $"{exportFilePathLabel} *";
+                    }
+                    else
+                    {
+                        exportFilePathField.label = exportFilePathLabel;
+                    }
                 }
                 else
                 {
-                    exportFilePath.label = "Export File Path";
+                    _data.exportFolderPath = exportFilePathField.value;
+                    if (Directory.Exists($"{Path.GetDirectoryName(Application.dataPath)}/{_data.exportFolderPath}"))
+                    {
+                        exportFilePathField.label = $"{exportFolderPathLabel} *";
+                    }
+                    else
+                    {
+                        exportFilePathField.label = exportFolderPathLabel;
+                    }
                 }
             });
             var pathSelectorButton = root.Q<Button>("PathSelectorButton");
             pathSelectorButton.RegisterCallback<ClickEvent>(evt =>
             {
-                var result = EditorUtility.SaveFilePanelInProject("Select file path to save",
-                    Path.GetFileName(_data.exportFilePath) ?? "Merged.anim", "anim", "Select file path to save in Project.", Path.GetDirectoryName(_data.exportFilePath) ?? "");
+                string result;
+                if (_data.exportMode == ExportMode.AllMerge)
+                {
+                    result = EditorUtility.SaveFilePanelInProject("Select file path to Export",
+                        Path.GetFileName(_data.exportFilePath) ?? "Merged.anim", "anim", "Select file path to Export in Project.", Path.GetDirectoryName(_data.exportFilePath) ?? "");
+                }
+                else
+                {
+                    result = EditorUtility.SaveFolderPanel("Select file path to Export", _data.exportFolderPath, Path.GetFileName(_data.exportFolderPath));
+                    result = result.Replace($"{Application.dataPath}/", "Assets/");
+                }
+                
                 if (!string.IsNullOrEmpty(result))
                 {
-                    exportFilePath.value = result;
+                    exportFilePathField.value = result;
+                }
+            });
+            
+            // 出力モード
+            var exportModeField = root.Q<EnumField>("ExportMode");
+            exportModeField.RegisterValueChangedCallback(evt =>
+            {
+                _data.exportMode = (ExportMode)exportModeField.value;
+
+                if (_data.exportMode == ExportMode.AllMerge)
+                {
+                    exportFilePathField.label = exportFilePathLabel;
+                    exportFilePathField.value = _data.exportFilePath;
+                }
+                else
+                {
+                    exportFilePathField.label = exportFolderPathLabel;
+                    exportFilePathField.value = _data.exportFolderPath;
                 }
             });
             
@@ -144,8 +196,8 @@ namespace iridescent.AnimationCurveManeuver
             var resultContainer = root.Q<VisualElement>("ResultContainer");
             var resultField = root.Q<VisualElement>("Result");
 
-            // マージ出力ボタン
-            var mergeButton = root.Q<Button>("MergeButton");
+            // 出力ボタン
+            var mergeButton = root.Q<Button>("ExportButton");
             mergeButton.RegisterCallback<ClickEvent>(evt =>
             {
                 if (!CheckAllParameterSet())
@@ -157,16 +209,31 @@ namespace iridescent.AnimationCurveManeuver
                 resultContainer.style.display = DisplayStyle.None;
 
                 var playableDirector = _data.playableDirector;
-                
-                var result = MergeClips(playableDirector,
-                    _data.animationTracks.Where(val => val.Value).Select(val => val.Key).ToArray(),
-                    _data.rootGameObject.transform, _data.applyOffset, _data.offsetMode, _data.exportFilePath);
+
+                AnimationClip[] results;
+                // AllMerge
+                if (_data.exportMode == ExportMode.AllMerge)
+                {
+                    results = ExportMergedClip(playableDirector,
+                        _data.animationTracks.Where(val => val.Value).Select(val => val.Key).ToArray(),
+                        _data.rootGameObject.transform, _data.applyOffset, _data.offsetMode, _data.exportFilePath);
+                }
+                // PerTracks
+                else
+                {
+                    results = ExportClipsPerTrack(playableDirector,
+                        _data.animationTracks.Where(val => val.Value).Select(val => val.Key).ToArray(),
+                        _data.rootGameObject.transform, _data.applyOffset, _data.offsetMode, _data.exportFolderPath);
+                }
 
                 // 結果表示
-                if (result != null)
+                if (results != null)
                 {
                     resultContainer.style.display = DisplayStyle.Flex;
-                    resultField.Add(new ObjectField(result.name){value = result});
+                    foreach (var result in results)
+                    {
+                        resultField.Add(new ObjectField(result.name){value = result});
+                    }
                 }
             });
 
@@ -331,9 +398,15 @@ namespace iridescent.AnimationCurveManeuver
                 return false;
             }
             
-            if (string.IsNullOrEmpty(_data.exportFilePath))
+            if (_data.exportMode == ExportMode.AllMerge && string.IsNullOrEmpty(_data.exportFilePath))
             {
                 Debug.LogError("Export File Path not set.");
+                return false;
+            }
+
+            if (_data.exportMode == ExportMode.PerTrack && string.IsNullOrEmpty(_data.exportFolderPath))
+            {
+                Debug.LogError("Export Folder Path not set.");
                 return false;
             }
 
@@ -345,7 +418,7 @@ namespace iridescent.AnimationCurveManeuver
         #region Process
 
         // 渡されたトラック全てを1クリップにマージ
-        private AnimationClip MergeClips(PlayableDirector playableDirector, AnimationTrack[] targetTracks, Transform root, bool applyOffset, OffsetMode offsetMode, string exportPath)
+        private AnimationClip[] ExportMergedClip(PlayableDirector playableDirector, AnimationTrack[] targetTracks, Transform root, bool applyOffset, OffsetMode offsetMode, string exportPath)
         {
             var curveBinding = new Dictionary<EditorCurveBinding, AnimationCurve>();
             foreach (var track in targetTracks)
@@ -377,50 +450,52 @@ namespace iridescent.AnimationCurveManeuver
             EditorUtility.SetDirty(mergedClip);
             TimelineUtil.CreateAnimationClipAssetWithOverwrite(ref mergedClip, exportPath);
 
-            return mergedClip;
+            return new []{mergedClip};
         }
-        
-        
-        /*
-        private void ExportTracks(PlayableDirector playableDirector, AnimationTrack[] targetTracks, Transform root, bool applyOffset, OffsetMode offsetMode, string exportDirectory )
+
+        // 渡されたトラックをトラックごとにクリップにして出力
+        private AnimationClip[] ExportClipsPerTrack(PlayableDirector playableDirector, AnimationTrack[] targetTracks,
+            Transform root, bool applyOffset, OffsetMode offsetMode, string exportPath)
         {
-          
+            var results = new List<AnimationClip>();
+
+            var i = 0;
             foreach (var track in targetTracks)
             {
                 var curveBinding = new Dictionary<EditorCurveBinding, AnimationCurve>();
+                
                 var trackBindingObject = playableDirector.GetGenericBinding(track) as Animator;
                 var pathToObject = GetPath(root, trackBindingObject.transform);
                 if (pathToObject == null)
                 {
                     Debug.LogError($"Path Not Found from root to track binding object.");
-                    return;
+                    continue;
                 }
                 var trackCurveBinding = MergeClipsInTrack(track, pathToObject, playableDirector.duration, applyOffset, offsetMode, playableDirector);
                 
                 // トラックごとのBindingCurveをマージ
                 curveBinding = MergeBindingCurveDictionaries(curveBinding, trackCurveBinding);
                 
-                var exportPath = Path.Combine(exportDirectory, trackBindingObject.name + ".anim");
-                
-                var timelineAsset = playableDirector.playableAsset as TimelineAsset;
+                var timeline = playableDirector.playableAsset as TimelineAsset;
                 var mergedClip = new AnimationClip
                 {
-                    name = Path.GetFileName(exportPath),
-                    frameRate = (float) timelineAsset.editorSettings.frameRate,
+                    name = track.name,
+                    frameRate = (float) timeline.editorSettings.frameRate,
                 };
             
                 AnimationUtility.SetEditorCurves(mergedClip, curveBinding.Keys.ToArray(),
                     curveBinding.Values.ToArray());
             
                 EditorUtility.SetDirty(mergedClip);
-                TimelineUtil.CreateAnimationClipAssetWithOverwrite(mergedClip, exportPath);
+                TimelineUtil.CreateAnimationClipAssetWithOverwrite(ref mergedClip, $"{exportPath}/{track.name}.anim");
+                
+                results.Add(mergedClip);
 
+                i++;
             }
-            
-            // ファイル出力
+
+            return results.ToArray();
         }
-        */
-        
 
         // トラックごとのClipのマージ
         private Dictionary<EditorCurveBinding, AnimationCurve> MergeClipsInTrack(AnimationTrack track, string pathToTrackObject, double duration, bool applyOffset, OffsetMode offsetMode, PlayableDirector playableDirector)
