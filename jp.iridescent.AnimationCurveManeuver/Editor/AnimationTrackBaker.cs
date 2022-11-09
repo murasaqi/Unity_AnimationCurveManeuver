@@ -138,6 +138,7 @@ namespace iridescent.AnimationCurveManeuver
                     _data.rootGameObject.transform, _data.applyOffset, _data.offsetMode, _data.exportFilePath);
             });
             
+            /*
             var exportTracksButton = root.Q<Button>("ExportTracksButton");
             exportTracksButton.RegisterCallback<ClickEvent>(evt =>
             {
@@ -153,6 +154,7 @@ namespace iridescent.AnimationCurveManeuver
                     _data.animationTracks.Where(val => val.Value).Select(val => val.Key).ToArray(),
                     _data.rootGameObject.transform, _data.applyOffset, _data.offsetMode, _data.exportFilePath);
             });
+            */
         }
 
         private void SetAnimationTrackList(VisualElement trackList)
@@ -176,6 +178,11 @@ namespace iridescent.AnimationCurveManeuver
                 var selectedHoveredBgColor = new Color[2];
                 ColorUtility.TryParseHtmlString("#6d4c96", out selectedHoveredBgColor[0]);
                 ColorUtility.TryParseHtmlString("#6d4c96", out selectedHoveredBgColor[1]);
+
+                ColorUtility.TryParseHtmlString("#c3c3c3", out var textColor);
+                ColorUtility.TryParseHtmlString("#545454", out var mutedTextColor);
+
+                var muted = track.muted || (track.GetGroup()?.muted ?? false);
                 
                 var trackField = new VisualElement
                 {
@@ -187,9 +194,11 @@ namespace iridescent.AnimationCurveManeuver
                         paddingBottom = 3,
                         flexDirection = FlexDirection.Row,
                         justifyContent = Justify.FlexStart,
-                        backgroundColor = bgColor[cnt%2]
+                        backgroundColor = bgColor[cnt%2],
+                        color = muted ? mutedTextColor : textColor,
                     }
                 };
+                trackField.pickingMode = muted ? PickingMode.Ignore : PickingMode.Position;
                 var toggle = new Toggle
                 {
                     style =
@@ -206,23 +215,26 @@ namespace iridescent.AnimationCurveManeuver
                 });
                 toggle.focusable = false;
                 toggle.pickingMode = PickingMode.Ignore;
+                toggle.Children().First().pickingMode = PickingMode.Ignore;
                 toggle.RegisterCallback<ClickEvent>(evt => toggle.value = !toggle.value); // トグルをクリックしたときに選択が上書きされてしまう問題への対処
                 var label = new Label($"{name} ({_data.playableDirector.GetGenericBinding(track).name})");
-                
-                trackField.RegisterCallback<MouseEnterEvent>(evt =>
+
+                if (!muted)
                 {
-                    trackField.style.backgroundColor = toggle.value ? selectedHoveredBgColor[cntCopy%2] : hoveredBgColor[cntCopy%2];
-                });
-                trackField.RegisterCallback<MouseLeaveEvent>(evt =>
-                {
-                    var color = trackField.style.backgroundColor.value;
-                    trackField.style.backgroundColor =
-                        toggle.value ? selectedBgColor[cntCopy%2] : bgColor[cntCopy%2];
-                });
-                trackField.RegisterCallback<ClickEvent>(evt =>
-                {
-                    toggle.value = !toggle.value;
-                });
+                    trackField.RegisterCallback<MouseEnterEvent>(evt =>
+                    {
+                        trackField.style.backgroundColor = toggle.value ? selectedHoveredBgColor[cntCopy%2] : hoveredBgColor[cntCopy%2];
+                    });
+                    trackField.RegisterCallback<MouseLeaveEvent>(evt =>
+                    {
+                        trackField.style.backgroundColor =
+                            toggle.value ? selectedBgColor[cntCopy%2] : bgColor[cntCopy%2];
+                    });
+                    trackField.RegisterCallback<ClickEvent>(evt =>
+                    {
+                        toggle.value = !toggle.value;
+                    });
+                }
 
                 trackField.Add(toggle);
                 trackField.Add(label);
@@ -272,6 +284,7 @@ namespace iridescent.AnimationCurveManeuver
         }
         
         
+        /*
         private void ExportTracks(PlayableDirector playableDirector, AnimationTrack[] targetTracks, Transform root, bool applyOffset, OffsetMode offsetMode, string exportDirectory )
         {
           
@@ -309,6 +322,7 @@ namespace iridescent.AnimationCurveManeuver
             
             // ファイル出力
         }
+        */
         
 
         // トラックごとのClipのマージ
