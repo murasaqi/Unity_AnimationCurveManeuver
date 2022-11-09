@@ -41,6 +41,9 @@ namespace iridescent.AnimationCurveManeuver
         
         private AnimationTrackBakerData _data = new AnimationTrackBakerData();
 
+        private List<Tuple<AnimationTrack, VisualElement>> trackElementPairs;
+        private VisualElement multipleSelectionStartElement = null;
+
         #region UI
 
         [MenuItem("Tools/AnimationTrackBaker")]
@@ -160,6 +163,8 @@ namespace iridescent.AnimationCurveManeuver
         private void SetAnimationTrackList(VisualElement trackList)
         {
             _data.animationTracks = new Dictionary<AnimationTrack, bool>();
+            trackElementPairs = new List<Tuple<AnimationTrack, VisualElement>>();
+            
             var tracks = TimelineUtil.GetAnimationTrackNameList(_data.playableDirector.playableAsset as TimelineAsset);
             var cnt = 0;
             foreach (var (name, track) in tracks)
@@ -233,6 +238,15 @@ namespace iridescent.AnimationCurveManeuver
                     trackField.RegisterCallback<ClickEvent>(evt =>
                     {
                         toggle.value = !toggle.value;
+
+                        if (evt.shiftKey)
+                        {
+                            if(multipleSelectionStartElement != null)
+                            {
+                                ApplyMultipleSelectionToggle(multipleSelectionStartElement, trackField);
+                            }
+                        }
+                        multipleSelectionStartElement = trackField;
                     });
                 }
 
@@ -240,8 +254,30 @@ namespace iridescent.AnimationCurveManeuver
                 trackField.Add(label);
                 
                 trackList.Add(trackField);
+                
+                trackElementPairs.Add(new Tuple<AnimationTrack, VisualElement>(track, trackField));
 
                 cnt++;
+            }
+        }
+        
+        // 複数選択の適用
+        private void ApplyMultipleSelectionToggle(VisualElement startElement, VisualElement endElement)
+        {
+            var startIndex = trackElementPairs.FindIndex(pair => pair.Item2 == startElement);
+            var endIndex = trackElementPairs.FindIndex(pair => pair.Item2 == endElement);
+            if (endIndex < startIndex)
+            {
+                (endIndex, startIndex) = (startIndex, endIndex);
+            }
+            for (var i = startIndex+1; i < endIndex; i++)
+            {
+                var track = trackElementPairs[i].Item1;
+                if (track.muted || (track.GetGroup()?.muted ?? false))
+                {
+                    continue;
+                }
+                (trackElementPairs[i].Item2.Children().First() as Toggle).value = true;
             }
         }
 
