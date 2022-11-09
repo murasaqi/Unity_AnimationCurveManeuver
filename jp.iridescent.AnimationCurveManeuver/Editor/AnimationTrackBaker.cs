@@ -430,7 +430,7 @@ namespace iridescent.AnimationCurveManeuver
                     Debug.LogError($"Path Not Found from root to track binding object.");
                     return null;
                 }
-                var trackCurveBinding = MergeClipsInTrack(track, pathToObject, playableDirector.duration, applyOffset, offsetMode, playableDirector);
+                var trackCurveBinding = MergeClipsInTrack(track, pathToObject, (float)playableDirector.duration, applyOffset, offsetMode, playableDirector);
                 
                 // トラックごとのBindingCurveをマージ
                 curveBinding = MergeBindingCurveDictionaries(curveBinding, trackCurveBinding);
@@ -471,7 +471,7 @@ namespace iridescent.AnimationCurveManeuver
                     Debug.LogError($"Path Not Found from root to track binding object.");
                     continue;
                 }
-                var trackCurveBinding = MergeClipsInTrack(track, pathToObject, playableDirector.duration, applyOffset, offsetMode, playableDirector);
+                var trackCurveBinding = MergeClipsInTrack(track, pathToObject, (float)playableDirector.duration, applyOffset, offsetMode, playableDirector);
                 
                 // トラックごとのBindingCurveをマージ
                 curveBinding = MergeBindingCurveDictionaries(curveBinding, trackCurveBinding);
@@ -498,7 +498,7 @@ namespace iridescent.AnimationCurveManeuver
         }
 
         // トラックごとのClipのマージ
-        private Dictionary<EditorCurveBinding, AnimationCurve> MergeClipsInTrack(AnimationTrack track, string pathToTrackObject, double duration, bool applyOffset, OffsetMode offsetMode, PlayableDirector playableDirector)
+        private Dictionary<EditorCurveBinding, AnimationCurve> MergeClipsInTrack(AnimationTrack track, string pathToTrackObject, float duration, bool applyOffset, OffsetMode offsetMode, PlayableDirector playableDirector)
         {
             var trackCurveBinding = new Dictionary<EditorCurveBinding, AnimationCurve>();
             
@@ -671,6 +671,10 @@ namespace iridescent.AnimationCurveManeuver
                         AnimationUtility.SetKeyLeftTangentMode(offsetCurves, i, tangentModes[i].leftTangent);
                         AnimationUtility.SetKeyRightTangentMode(offsetCurves, i, tangentModes[i].rightTangent);
                     }
+                    
+                    // 0とduration位置にキーを打つ
+                    AnimationCurveUtilityWrapper.AddBetweenKey(offsetCurves, 0);
+                    AnimationCurveUtilityWrapper.AddBetweenKey(offsetCurves, duration);
 
                     clipCurveBinding.Add(newBinding, offsetCurves);
                 }
@@ -706,6 +710,19 @@ namespace iridescent.AnimationCurveManeuver
             return  GetPathRecursive(rootTrans, targetTrans, "");
         }
 
+        public class KeyframeComparer : IEqualityComparer<Keyframe>
+        {
+            public bool Equals(Keyframe lhs, Keyframe rhs)
+            {
+                return Mathf.Approximately(lhs.time, rhs.time);
+            }
+
+            public int GetHashCode(Keyframe obj)
+            {
+                return obj.GetHashCode();
+            }
+        }
+
         private Dictionary<EditorCurveBinding, AnimationCurve> MergeBindingCurveDictionaries(Dictionary<EditorCurveBinding, AnimationCurve> dictionary1,
             Dictionary<EditorCurveBinding, AnimationCurve> dictionary2)
         {
@@ -715,7 +732,7 @@ namespace iridescent.AnimationCurveManeuver
                 if (merged.ContainsKey(binding))
                 {
                     merged[binding] =
-                        new AnimationCurve(merged[binding].keys.Concat(curve.keys).ToArray());
+                        new AnimationCurve(merged[binding].keys.Concat(curve.keys).Distinct(new KeyframeComparer()).ToArray());
                 }
                 else
                 {
