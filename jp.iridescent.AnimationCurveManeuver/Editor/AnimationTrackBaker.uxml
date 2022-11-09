@@ -1,6 +1,6 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
-    <uie:ObjectField label="Playable Director" type="UnityEngine.Playables.PlayableDirector, UnityEngine.DirectorModule" name="PlayableDirectorField" view-data-key="playableDirectorField" binding-path="_data.playableDirector" />
-    <uie:ObjectField label="Root GameObject" type="UnityEngine.GameObject, UnityEngine.CoreModule" binding-path="_data.rootGameObject" name="RootGameObject" view-data-key="rootGameObject" tooltip="Root of the animation clip to be baked." />
+    <uie:ObjectField label="Playable Director" type="UnityEngine.Playables.PlayableDirector, UnityEngine.DirectorModule" name="PlayableDirectorField" view-data-key="playableDirectorField" />
+    <uie:ObjectField label="Root GameObject" type="UnityEngine.GameObject, UnityEngine.CoreModule" name="RootGameObject" view-data-key="rootGameObject" tooltip="Root of the animation clip to be baked." />
     <ui:VisualElement name="ExecuteInfoContainer">
         <ui:VisualElement name="SelectButtonContainer" style="flex-direction: row; justify-content: space-between; min-height: 21px;">
             <ui:Button tabindex="-1" text="Select All" display-tooltip-when-elided="true" name="SelectAllButton" style="flex-grow: 1; min-width: auto; min-height: auto;" />
@@ -9,11 +9,11 @@
         <ui:ScrollView>
             <ui:VisualElement name="TrackList" />
         </ui:ScrollView>
-        <ui:Toggle label="Apply Dirty Offset" name="DirtyOffsetToggle" view-data-key="dirtyOffsetToggle" tooltip="If true, apply transform offset of the clip." binding-path="_data.applyOffset" style="min-height: 21px; align-items: center;" />
+        <ui:Toggle label="Apply Dirty Offset" name="DirtyOffsetToggle" view-data-key="dirtyOffsetToggle" tooltip="If true, apply transform offset of the clip." style="min-height: 21px; align-items: center;" />
         <uie:EnumField label="Offset Rotation Method" value="Euler" name="OffsetRotationMethod" type="iridescent.AnimationCurveManeuver.OffsetMode,  Editor.jp.iridecent.AnimationClipManeuver" include-obsolete-values="false" />
     </ui:VisualElement>
     <ui:VisualElement style="flex-direction: row; flex-grow: 0; min-height: 21px;">
-        <ui:TextField picking-mode="Ignore" label="Export File Path" name="ExportFilePath" view-data-key="exportFilePath" binding-path="_data.exportFilePath" readonly="false" style="flex-grow: 3; min-height: auto; align-items: center;" />
+        <ui:TextField picking-mode="Ignore" label="Export File Path" name="ExportFilePath" view-data-key="exportFilePath" readonly="false" style="flex-grow: 3; min-height: auto; align-items: center;" />
         <ui:Button tabindex="-1" text="..." display-tooltip-when-elided="true" enable-rich-text="true" name="PathSelectorButton" />
     </ui:VisualElement>
     <ui:Button tabindex="-1" text="Merge" display-tooltip-when-elided="true" name="MergeButton" />

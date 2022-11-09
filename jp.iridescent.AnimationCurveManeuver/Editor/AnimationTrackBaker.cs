@@ -113,18 +113,33 @@ namespace iridescent.AnimationCurveManeuver
                 SetAnimationTrackList(trackList);
             });
 
+            // 出力ファイルのパス設定
             var exportFilePath = root.Q<TextField>("ExportFilePath");
             exportFilePath.RegisterValueChangedCallback(evt =>
             {
-                _data.exportFilePath = evt.newValue;
+                _data.exportFilePath = exportFilePath.value;
+
+                if (File.Exists($"{Path.GetDirectoryName(Application.dataPath)}/{_data.exportFilePath}"))
+                {
+                    exportFilePath.label = "Export File Path *";
+                }
+                else
+                {
+                    exportFilePath.label = "Export File Path";
+                }
             });
             var pathSelectorButton = root.Q<Button>("PathSelectorButton");
             pathSelectorButton.RegisterCallback<ClickEvent>(evt =>
             {
-                exportFilePath.value = EditorUtility.SaveFilePanelInProject("Select file path to save",
-                    "MergedAnimationClip.anim", "anim", "Select file path to save in Project.");
+                var result = EditorUtility.SaveFilePanelInProject("Select file path to save",
+                    Path.GetFileName(_data.exportFilePath) ?? "Merged.anim", "anim", "Select file path to save in Project.", Path.GetDirectoryName(_data.exportFilePath) ?? "");
+                if (!string.IsNullOrEmpty(result))
+                {
+                    exportFilePath.value = result;
+                }
             });
 
+            // マージ出力ボタン
             var mergeButton = root.Q<Button>("MergeButton");
             mergeButton.RegisterCallback<ClickEvent>(evt =>
             {
